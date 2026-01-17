@@ -9,6 +9,7 @@ M.dependencies = {'career_career', "career_modules_log", "render_renderViews", "
 local dateUtils = require('utils/dateUtils')
 local parking = require('gameplay/parking')
 local freeroam_facilities = require('freeroam/facilities')
+local AIWorkerManager_ok, AIWorkerManager = pcall(require, "career/modules/AIWorkerManager")
 
 local minimumVersion = 42
 local defaultVehicle = {model = "covet", config = "DXi_M"}
@@ -1114,6 +1115,27 @@ end
 local function getVehicleUiData(inventoryId, inventoryIdsInGarage)
   local vehicleData = deepcopy(vehicles[inventoryId])
   if not vehicleData then return end
+
+  -- AI Worker assignment marker for UI (makes vehicle name say "[IN USE]")
+  local aiAssignments = {}
+  if AIWorkerManager_ok and AIWorkerManager and AIWorkerManager.getAssignments then
+    local ok, result = pcall(AIWorkerManager.getAssignments)
+    if ok and type(result) == "table" then aiAssignments = result end
+  end
+  if aiAssignments[inventoryId] then
+    vehicleData.vehicleName = (vehicleData.vehicleName or tostring(inventoryId)) .. " [IN USE]"
+    vehicleData.description = "In Use by AI Worker"
+    vehicleData.icon = "ban" -- (if supported, otherwise ignored)
+    -- These are included for compatibility, but not always visual:
+    vehicleData.overlayText = "In Use by AI Worker"
+    vehicleData.locked = true
+    vehicleData.retrievePermission = { allow = false }
+    vehicleData.repairPermission   = { allow = false }
+    vehicleData.storePermission    = { allow = false }
+    vehicleData.deliverPermission  = { allow = false }
+    vehicleData.sellPermission     = { allow = false }
+  end
+
   local garage = getClosestGarage()
   local currentGarageId = garage and garage.id
   local currentGarageSpace = currentGarageId and career_modules_garageManager.isGarageSpace(currentGarageId) or {false, 0}
@@ -1353,6 +1375,10 @@ local function closeMenu()
     closeMenuCallback()
   else
     career_career.closeAllMenus()
+	extensions.core_jobsystem.create(function(job)
+		job.sleep(0.1)                -- waits a tenth of a second (adjust if needed)
+		career_modules_computer.openComputerMenuById(computerId)
+	end)
   end
 end
 
@@ -1409,8 +1435,20 @@ local function openMenuFromComputer(_originComputerId)
   openMenu(
     {
       {
-        callback = function(inventoryId) spawnVehicleAndTeleportToGarage(false, inventoryId) end,
-        buttonText = "Retrieve",
+		callback = function(inventoryId)
+			local AIWorkerManager_ok, AIWorkerManager = pcall(require, "career/modules/AIWorkerManager")
+			local aiAssignments = {}
+			if AIWorkerManager_ok and AIWorkerManager and AIWorkerManager.getAssignments then
+				local ok, result = pcall(AIWorkerManager.getAssignments)
+				if ok and type(result) == "table" then aiAssignments = result end
+			end
+			if aiAssignments[inventoryId] then
+				ui_message("Vehicle is currently assigned to AI Worker and unavailable.", 6, "career")
+				return
+			end
+			spawnVehicleAndTeleportToGarage(false, inventoryId)
+		end,
+		buttonText = "Retrieve",
         insuranceRequired = true,
         requiredVehicleNotInGarage = true,
         requireAtCurrentGarage = true
