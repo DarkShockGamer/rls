@@ -1385,9 +1385,9 @@ local function closeMenu()
     -- Defensive check: only reopen computer menu if career_modules_computer is loaded
     -- and computerId is valid. This prevents errors if the menu is closed before
     -- the computer module is fully initialized or if no computer is active.
-    if career_modules_computer and career_modules_computer.getComputerId then
+    if career_modules_computer and career_modules_computer.getComputerId and career_modules_computer.openComputerMenuById then
       local currentComputerId = career_modules_computer.getComputerId()
-      if currentComputerId and career_modules_computer.openComputerMenuById then
+      if currentComputerId then
         extensions.core_jobsystem.create(function(job)
           job.sleep(0.1)  -- Brief delay to allow UI state to settle
           -- Double-check the computer module is still available
